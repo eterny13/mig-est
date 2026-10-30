@@ -1,0 +1,44 @@
+[
+  {
+    "file": "01_instant_add_column.sql",
+    "algorithm": "INSTANT",
+    "risk": "medium",
+    "rule_ids": ["ADD-COL-01", "META-01"]
+  },
+  {
+    "file": "02_inplace_index.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["IDX-ADD-01", "META-01"]
+  },
+  {
+    "file": "03_copy_charset.sql",
+    "algorithm": "COPY",
+    "risk": "high",
+    "rule_ids": ["CHARSET-01"]
+  },
+  {
+    "file": "04_multi_operation.sql",
+    "algorithm": "COPY",
+    "risk": "high",
+    "rule_ids": ["ADD-COL-01", "PK-ADD-01"]
+  },
+  {
+    "file": "05_create_table.sql",
+    "algorithm": "INSTANT",
+    "risk": "low",
+    "rule_ids": ["CREATE-01"]
+  },
+  {
+    "file": "06_unsupported_trigger.sql",
+    "algorithm": "UNKNOWN",
+    "risk": "medium",
+    "rule_ids": ["UNSUPPORTED-01"]
+  },
+  {
+    "file": "07_add_foreign_key.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["FK-ADD-01", "META-01"]
+  }
+]

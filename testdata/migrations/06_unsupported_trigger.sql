@@ -1,0 +1,4 @@
+CREATE TRIGGER orders_before_insert
+BEFORE INSERT ON orders
+FOR EACH ROW
+SET NEW.created_at = COALESCE(NEW.created_at, CURRENT_TIMESTAMP);
