@@ -1,0 +1,25 @@
+# mig-est configuration
+# All fields are optional. Defaults are shown in comments.
+#
+# Do not put credentials in this file. Use MIGEST_DSN for the connection string.
+
+mysql:
+  # Used only in offline mode. When omitted, mig-est uses 8.0.28.
+  # Use a full patch version for precise feature gates, e.g. "8.0.36" or "8.4.2".
+  # A series without a patch (e.g. "8.0") assumes the latest patch in that series.
+  version: "8.0.36"
+
+thresholds:
+  large_table_rows: 10000000      # >= this row count is a large table
+  large_table_size_mb: 5000       # >= this size (data + indexes) is a large table
+  long_transaction_minutes: 5     # a longer transaction touching the table is MDL-01
+  replica_lag_seconds: 10         # replica lag threshold for REP-01
+  disk_safety_factor: 1.5         # COPY needs table size * this factor of free space
+
+fail_on: critical                 # low, medium, high, critical, or never
+output:
+  format: text                    # text, markdown, or json
+
+history:
+  path: ./.mig-est/history.jsonl  # local JSON Lines calibration history
+  enabled: true

@@ -1,0 +1,22 @@
+# Build output
+/bin/
+/dist/
+/mig-est
+*.test
+*.out
+coverage.html
+
+# Local calibration and reports
+/.mig-est/
+/mig-est-report.*
+/report.*
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local environment
+.env
+.env.*
