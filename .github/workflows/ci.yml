@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check formatting
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            echo "gofmt is required for:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build -trimpath -o /tmp/mig-est ./cmd/mig-est
+
+      - name: Offline smoke test
+        run: |
+          set +e
+          /tmp/mig-est check \
+            --offline \
+            --file ./testdata/migrations/03_copy_charset.sql \
+            --table-size orders=8200MB \
+            --table-rows orders=12400000 \
+            --disk-free 50GB \
+            --fail-on high \
+            --format json \
+            --output /tmp/mig-est-report.json
+          code=$?
+          set -e
+          test -s /tmp/mig-est-report.json
+          if [ "$code" -ne 1 ]; then
+            echo "expected exit 1 from --fail-on high, got $code"
+            exit 1
+          fi
