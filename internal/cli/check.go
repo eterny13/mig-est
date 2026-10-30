@@ -66,15 +66,23 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	fs.DurationVar(&opts.timeout, "timeout", 10*time.Second, "timeout for each database query")
 	fs.BoolVar(&opts.noColor, "no-color", false, "disable ANSI colors")
 	fs.BoolVar(&opts.quiet, "quiet", false, "print a one-line summary (text format)")
-	if err := fs.Parse(args); err != nil {
+	positional, err := parseFlagSet(fs, args, func(file string) {
+		opts.files = append(opts.files, file)
+	})
+	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			checkUsage(stdout)
 			return 0
 		}
 		return fail(stderr, "check: %v", err)
 	}
-	if fs.NArg() > 0 {
-		return fail(stderr, "check: unexpected argument %q (use --file or --dir)", fs.Arg(0))
+	if len(positional) > 0 {
+		if opts.stdin {
+			return fail(stderr, "check: positional arguments cannot be combined with --stdin")
+		}
+		if len(opts.dirs) > 0 {
+			return fail(stderr, "check: positional arguments cannot be combined with --dir")
+		}
 	}
 	if opts.timeout <= 0 {
 		return fail(stderr, "check: --timeout must be positive")
@@ -284,6 +292,7 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 
 func checkUsage(w io.Writer) {
 	fmt.Fprint(w, `Usage:
+  mig-est check [flags] [migration.sql...]
   mig-est check --file migration.sql [flags]
   mig-est check --dir ./migrations [flags]
   mig-est check --stdin [flags]
