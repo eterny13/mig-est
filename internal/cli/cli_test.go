@@ -175,3 +175,70 @@ func TestVersionAndHelp(t *testing.T) {
 		t.Errorf("no args exit=%d, want 2", code)
 	}
 }
+
+func TestCheckPositionalFileArguments(t *testing.T) {
+	dir := t.TempDir()
+	cfg := writeTestConfig(t, dir, "")
+	sqlFile1 := writeTestFile(t, dir, "01_add_col.sql", "ALTER TABLE orders ADD COLUMN status VARCHAR(20);\n")
+	sqlFile2 := writeTestFile(t, dir, "02_add_idx.sql", "CREATE INDEX idx_status ON orders (status);\n")
+
+	var out, errOut bytes.Buffer
+	// Positional arguments without --file
+	code := Run([]string{
+		"check", sqlFile1, "--offline", "--config", cfg,
+		"--table-size", "orders=10MB", "--table-rows", "orders=1000",
+		"--format", "json", "--file", sqlFile2,
+	}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0; stderr=%s", code, errOut.String())
+	}
+	var rep model.Report
+	if err := json.Unmarshal(out.Bytes(), &rep); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(rep.Statements) != 2 {
+		t.Fatalf("got %d statements, want 2", len(rep.Statements))
+	}
+	if !strings.HasSuffix(rep.Statements[0].File, "01_add_col.sql") || !strings.HasSuffix(rep.Statements[1].File, "02_add_idx.sql") {
+		t.Fatalf("input order was not preserved: %q, %q", rep.Statements[0].File, rep.Statements[1].File)
+	}
+
+	// Positional arguments combined with --stdin should fail
+	out.Reset()
+	errOut.Reset()
+	code = Run([]string{"check", "--stdin", sqlFile1}, &out, &errOut)
+	if code != 2 || !strings.Contains(errOut.String(), "cannot be combined with --stdin") {
+		t.Errorf("expected exit 2 for stdin+positional; code=%d, err=%s", code, errOut.String())
+	}
+
+	// Positional arguments combined with --dir should fail
+	out.Reset()
+	errOut.Reset()
+	code = Run([]string{"check", "--dir", dir, sqlFile1}, &out, &errOut)
+	if code != 2 || !strings.Contains(errOut.String(), "cannot be combined with --dir") {
+		t.Errorf("expected exit 2 for dir+positional; code=%d, err=%s", code, errOut.String())
+	}
+}
+
+func TestRecordPositionalFileArguments(t *testing.T) {
+	dir := t.TempDir()
+	historyPath := filepath.Join(dir, "history", "history.jsonl")
+	cfg := writeTestConfig(t, dir, historyPath)
+	sqlFile := writeTestFile(t, dir, "migration.sql", "ALTER TABLE orders ADD COLUMN status VARCHAR(20);\n")
+
+	var out, errOut bytes.Buffer
+	code := Run([]string{
+		"record", sqlFile, "--actual", "5s", "--table", "orders",
+		"--config", cfg,
+	}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit = %d; stderr=%s", code, errOut.String())
+	}
+	records, err := history.Load(historyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 1 || records[0].Operation != "ADD_COLUMN" {
+		t.Fatalf("unexpected records: %+v", records)
+	}
+}

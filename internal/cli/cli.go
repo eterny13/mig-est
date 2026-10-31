@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"io"
 
@@ -11,9 +12,11 @@ import (
 const usage = `mig-est - diagnose MySQL migrations before you run them
 
 Usage:
+  mig-est check   [flags] [migration.sql...]
   mig-est check   --file migration.sql [flags]
   mig-est check   --dir ./migrations [flags]
   mig-est check   --stdin [flags]
+  mig-est record  [flags] [migration.sql...]
   mig-est record  --file migration.sql --actual 8m12s --table orders
   mig-est version
   mig-est help
@@ -50,4 +53,33 @@ func Run(args []string, stdout, stderr io.Writer) int {
 func fail(stderr io.Writer, format string, args ...any) int {
 	fmt.Fprintf(stderr, "mig-est: "+format+"\n", args...)
 	return 2
+}
+
+// parseFlagSet parses flags allowing intermixed positional arguments and flags.
+func parseFlagSet(fs *flag.FlagSet, args []string, onPositional func(string)) ([]string, error) {
+	var positional []string
+	for len(args) > 0 {
+		if args[0] == "--" {
+			for _, arg := range args[1:] {
+				positional = append(positional, arg)
+				if onPositional != nil {
+					onPositional(arg)
+				}
+			}
+			break
+		}
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		remaining := fs.Args()
+		if len(remaining) == 0 {
+			break
+		}
+		positional = append(positional, remaining[0])
+		if onPositional != nil {
+			onPositional(remaining[0])
+		}
+		args = remaining[1:]
+	}
+	return positional, nil
 }

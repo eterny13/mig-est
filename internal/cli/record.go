@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -48,15 +49,15 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&opts.size, "size", "", "table size, e.g. 8200MB")
 	fs.StringVar(&opts.dsn, "dsn", "", "DSN used only to read host/database (prefer MIGEST_DSN)")
 	fs.StringVar(&opts.configPath, "config", "", "config file (default ./.mig-est.yaml if present)")
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
+	_, err := parseFlagSet(fs, args, func(file string) {
+		opts.files = append(opts.files, file)
+	})
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
 			recordUsage(stdout)
 			return 0
 		}
 		return fail(stderr, "record: %v", err)
-	}
-	if fs.NArg() > 0 {
-		return fail(stderr, "record: unexpected argument %q", fs.Arg(0))
 	}
 	if strings.TrimSpace(opts.actual) == "" {
 		return fail(stderr, "record: --actual is required")
@@ -171,6 +172,7 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 
 func recordUsage(w io.Writer) {
 	fmt.Fprint(w, `Usage:
+  mig-est record [flags] [migration.sql...]
   mig-est record --file migration.sql --actual 8m12s --table orders [flags]
 
 Flags:

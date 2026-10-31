@@ -108,7 +108,7 @@ func gatherInputs(files, dirs []string, pattern string, useStdin bool, stdin io.
 		out = append(out, sqlInput{Name: "<stdin>", Data: data})
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("no SQL input; use --file, --dir, or --stdin")
+		return nil, fmt.Errorf("no SQL input; specify files or use --file, --dir, or --stdin")
 	}
 	return out, nil
 }

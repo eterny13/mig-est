@@ -163,9 +163,11 @@ unknowns rather than treated as passing checks.
 ## Command reference
 
 ```text
+mig-est check   [flags] [migration.sql...]
 mig-est check   --file migration.sql [flags]
 mig-est check   --dir ./migrations [flags]
 mig-est check   --stdin [flags]
+mig-est record  [flags] [migration.sql...]
 mig-est record  --file migration.sql --actual 8m12s --table orders
 mig-est version
 mig-est help
@@ -175,7 +177,7 @@ mig-est help
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--file PATH` | — | SQL file; repeatable and glob-capable |
+| `--file PATH` | — | SQL file; repeatable and glob-capable (or pass files as positional arguments) |
 | `--dir PATH` | — | Directory of SQL files; repeatable |
 | `--pattern GLOB` | `*.sql` | Pattern used with `--dir` |
 | `--stdin` | false | Read SQL from standard input |
