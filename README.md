@@ -7,15 +7,15 @@ locks, estimates a time range and disk requirement, and suggests safer
 alternatives.
 
 > **Status: v0.1 prototype.** The binary, offline/online paths, reports, and
-> calibration history work. Prebuilt release binaries, Homebrew packaging, and
-> the benchmark results described in the full specification are not published
-> yet. Build from source and test against a staging database first.
+> calibration history work. Prebuilt release binaries and Homebrew packaging
+> are not published yet. Initial single-run benchmark results are listed below;
+> build from source and test against a staging database first.
 
 > **mig-est never executes a migration.** It parses SQL as text and, in online
 > mode, sends only `SELECT` and `SHOW` queries. There is no DDL/DML execution
 > path.
 
-The original Japanese specification is in [`docs/spec.md`](docs/spec.md).
+The v0.1 specification [`docs/spec.md`](docs/spec.md).
 
 ## What it does
 
@@ -415,8 +415,33 @@ internal/model/       shared types
 internal/mysqlver/    version parsing and feature gates
 testdata/             parser/classifier fixtures and expected results
 docker/               local MySQL 8.0/8.4 environment
-docs/spec.md          original Japanese specification
+docs/spec.md          v0.1 specification
 ```
+
+## Benchmarks
+
+These are single-run measurements from local Docker MySQL containers. The test
+table used InnoDB, an auto-increment BIGINT primary key, and a 64-character
+payload. Each row count was verified after the ALTER. The measured statement
+converted the table from `utf8mb4_0900_ai_ci` to `utf8mb4_bin` with
+`ALGORITHM=COPY, LOCK=EXCLUSIVE`.
+
+| MySQL | Rows | Table size | mig-est estimate (low confidence) | Measured wall time |
+| --- | ---: | ---: | ---: | ---: |
+| 8.0.46 | 1,000,000 | 99,221,504 bytes (94.6 MiB) | 0.6–1.9 s | 1.99 s |
+| 8.0.46 | 10,000,000 | 988,807,168 bytes (943.0 MiB) | 6.3–18.9 s | 21.18 s |
+| 8.4.11 | 1,000,000 | 99,221,504 bytes (94.6 MiB) | 0.6–1.9 s | 1.52 s |
+| 8.4.11 | 10,000,000 | 988,807,168 bytes (943.0 MiB) | 6.3–18.9 s | 12.70 s |
+
+All four operations completed using the requested COPY algorithm and EXCLUSIVE
+lock. The 8.0 measurements were slightly above the estimate's upper bound; the
+8.4 measurements were within range. These are exploratory results, not a
+comparison of MySQL versions or a performance guarantee. Each case was run
+once, sequentially, without explicitly clearing OS or InnoDB caches. The
+container engine had 8 CPUs and 4,106,604,544 bytes of memory; each server used
+a 128 MiB InnoDB buffer pool. The host-measured duration includes `docker exec`
+and MySQL client startup. See [`docs/spec.md`](docs/spec.md#173-performance-benchmark-record)
+for the test setup and additional context.
 
 ## Known limitations
 
@@ -432,8 +457,10 @@ docs/spec.md          original Japanese specification
 - Partition and tablespace operations are conservative and deserve manual
   review.
 - gh-ost/pt-osc advice is a prerequisite check, not an execution integration.
-- Benchmarks on 1M/10M-row tables and released Linux/macOS artifacts remain
-  work toward a public v0.1 release.
+- The published benchmarks are single-run local Docker results and may not
+  represent production hardware. Repeated tests on production-sized staging
+  systems are still needed. Prebuilt Linux/macOS release assets and Homebrew
+  packaging are not published.
 - The tool does not inspect table data and does not check PII or business
   constraints in existing rows.
 
