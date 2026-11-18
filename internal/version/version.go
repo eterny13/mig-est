@@ -5,7 +5,7 @@ import "fmt"
 
 // These values are overridden at build time with -ldflags.
 var (
-	Version = "0.1.0-dev"
+	Version = "0.1.1-dev"
 	Commit  = "unknown"
 	Date    = "unknown"
 )

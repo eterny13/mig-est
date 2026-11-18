@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. v0.1.1). If empty, automatically increments patch version.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify formatting, vet, and tests
+        run: |
+          set -euo pipefail
+          files="$(gofmt -l .)"
+          if [ -n "${files}" ]; then
+            echo "gofmt is required for:"
+            echo "${files}"
+            exit 1
+          fi
+          go vet ./...
+          go test -race ./...
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_VERSION}" ]; then
+            VERSION="${INPUT_VERSION}"
+            case "${VERSION}" in
+              v*) ;;
+              *) VERSION="v${VERSION}" ;;
+            esac
+            if ! echo "${VERSION}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+              echo "Invalid semantic version: ${VERSION} (expected e.g. v0.1.1)" >&2
+              exit 1
+            fi
+            # Create and push tag if it does not exist yet
+            if ! git rev-parse "${VERSION}" >/dev/null 2>&1; then
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git tag "${VERSION}"
+              git push origin "${VERSION}"
+            fi
+          elif [ "${REF_TYPE}" = "tag" ]; then
+            VERSION="${REF_NAME}"
+          else
+            LATEST_TAG="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
+            if [ -z "${LATEST_TAG}" ]; then
+              LATEST_TAG="v0.0.0"
+            fi
+            # Strip any pre-release suffix and increment patch version of vX.Y.Z
+            BASE_TAG="${LATEST_TAG%%-*}"
+            VERSION="$(echo "${BASE_TAG}" | awk -F. '{print $1"."$2"."$3+1}')"
+            echo "Auto-incremented version: ${VERSION} (previous: ${LATEST_TAG})"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "${VERSION}"
+            git push origin "${VERSION}"
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build release binaries
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          VERSION="${VERSION}" GOOS=linux  GOARCH=amd64 make build BINARY=dist/mig-est-linux-amd64
+          VERSION="${VERSION}" GOOS=linux  GOARCH=arm64 make build BINARY=dist/mig-est-linux-arm64
+          VERSION="${VERSION}" GOOS=darwin GOARCH=amd64 make build BINARY=dist/mig-est-darwin-amd64
+          VERSION="${VERSION}" GOOS=darwin GOARCH=arm64 make build BINARY=dist/mig-est-darwin-arm64
+
+          (cd dist && shasum -a 256 mig-est-* > SHA256SUMS)
+          (cd dist && shasum -a 256 -c SHA256SUMS)
+
+      - name: Smoke test Linux amd64 binary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          ver_out="$(./dist/mig-est-linux-amd64 version)"
+          echo "${ver_out}"
+          echo "${ver_out}" | grep -Fq "mig-est ${VERSION} "
+          ./dist/mig-est-linux-amd64 check \
+            --offline \
+            --file ./testdata/migrations/01_instant_add_column.sql \
+            --table-size orders=10MB \
+            --table-rows orders=1000 \
+            --no-color >/dev/null
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/mig-est-linux-amd64
+            dist/mig-est-linux-arm64
+            dist/mig-est-darwin-amd64
+            dist/mig-est-darwin-arm64
+            dist/SHA256SUMS
