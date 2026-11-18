@@ -241,4 +241,17 @@ func TestRecordPositionalFileArguments(t *testing.T) {
 	if len(records) != 1 || records[0].Operation != "ADD_COLUMN" {
 		t.Fatalf("unexpected records: %+v", records)
 	}
+
+	out.Reset()
+	errOut.Reset()
+	code = Run([]string{
+		"record", sqlFile, "--actual", "5s", "--table", "orders",
+		"--host", "migread:secret@db.example.com:3306", "--config", cfg,
+	}, &out, &errOut)
+	if code != 2 || !strings.Contains(errOut.String(), "must not contain credentials") {
+		t.Errorf("expected exit 2 when --host contains credentials; code=%d, err=%s", code, errOut.String())
+	}
+	if strings.Contains(errOut.String(), "secret") {
+		t.Errorf("stderr leaked secret from --host: %s", errOut.String())
+	}
 }

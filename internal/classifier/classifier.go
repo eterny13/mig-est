@@ -182,6 +182,7 @@ func (c *Classifier) classifyOption(opt parser.Option, table *catalog.TableInfo)
 		return model.Operation{
 			Kind: model.OpDropCheck, Algorithm: model.AlgorithmInplace, Lock: "NONE",
 			RuleID: "CHECK-DROP-01", Risk: model.RiskLow, ConstraintName: opt.Note,
+			Note: "dropping a CHECK constraint is metadata-only.",
 		}
 	case model.OpConvertCharset:
 		return model.Operation{

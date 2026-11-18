@@ -132,6 +132,9 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 	}
 
 	host := strings.TrimSpace(opts.host)
+	if strings.Contains(host, "@") || strings.Contains(host, "://") {
+		return fail(stderr, "record: --host must not contain credentials or a URL scheme")
+	}
 	database := strings.TrimSpace(opts.database)
 	dsn := strings.TrimSpace(opts.dsn)
 	if dsn == "" {

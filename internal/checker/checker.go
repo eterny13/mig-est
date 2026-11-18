@@ -351,7 +351,7 @@ func Check(stmts []*model.Statement, snap *catalog.Snapshot, th model.Thresholds
 			default:
 				add(model.Finding{
 					ID: "REP-01", Severity: model.SeverityInfo, Table: "", StatementIndex: firstStmt,
-					Message: "replica threads are running but does not report a lag value",
+					Message: "replica threads are running but do not report a lag value",
 				})
 			}
 		}

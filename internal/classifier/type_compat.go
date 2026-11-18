@@ -41,7 +41,7 @@ func CompareColumnTypes(old, new model.ColumnType) TypeChange {
 	}
 	oldBase := normalizeTypeBase(old.Base)
 	newBase := normalizeTypeBase(new.Base)
-	if isEnumSet(oldBase) && isEnumSet(newBase) {
+	if oldBase == newBase && isEnumSet(oldBase) {
 		return compareEnumSet(old, new, oldBase)
 	}
 	if oldBase == newBase {
@@ -56,7 +56,7 @@ func CompareColumnTypes(old, new model.ColumnType) TypeChange {
 		}
 		return TypeChange{Algorithm: model.AlgorithmCopy, Risk: model.RiskHigh, RuleID: "TYPECHG-02", Note: "narrowing an integer type rewrites the table"}
 	}
-	if textRank[oldBase] > 0 && textRank[newBase] > 0 {
+	if (textRank[oldBase] > 0 && textRank[newBase] > 0) || (blobRank[oldBase] > 0 && blobRank[newBase] > 0) {
 		return TypeChange{Algorithm: model.AlgorithmUnknown, Risk: model.RiskMedium, RuleID: "TYPECHG-03", Note: "changing between TEXT/BLOB sizes requires manual confirmation"}
 	}
 	return TypeChange{
@@ -109,7 +109,27 @@ func compareEnumSet(old, new model.ColumnType, base string) TypeChange {
 	if len(old.EnumValues) == len(new.EnumValues) {
 		return TypeChange{Algorithm: model.AlgorithmInstant, Risk: model.RiskLow, RuleID: "TYPECHG-01", Note: "same " + strings.ToUpper(base) + " values"}
 	}
+	if enumSetStorageBytes(base, len(old.EnumValues)) != enumSetStorageBytes(base, len(new.EnumValues)) {
+		return TypeChange{Algorithm: model.AlgorithmCopy, Risk: model.RiskHigh, RuleID: "TYPECHG-02", Note: "appending " + strings.ToUpper(base) + " values across a storage-byte boundary rewrites the table"}
+	}
 	return TypeChange{Algorithm: model.AlgorithmInplace, Risk: model.RiskMedium, RuleID: "TYPECHG-01", Note: "appending " + strings.ToUpper(base) + " values can be done in place; verify old values"}
+}
+
+func enumSetStorageBytes(base string, count int) int {
+	if count <= 0 {
+		return 0
+	}
+	if base == "enum" {
+		if count <= 255 {
+			return 1
+		}
+		return 2
+	}
+	bytes := (count + 7) / 8
+	if bytes > 4 {
+		return 8
+	}
+	return bytes
 }
 
 func isPrefix(old, new []string) bool {

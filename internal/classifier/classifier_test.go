@@ -41,6 +41,8 @@ func completeTable() *catalog.TableInfo {
 			{Name: "status", TypeRaw: "varchar(50)", Nullable: true},
 			{Name: "amount", TypeRaw: "int", Nullable: false},
 			{Name: "kind", TypeRaw: "enum('a','b')", Nullable: false},
+			{Name: "flags", TypeRaw: "set('f1','f2','f3','f4','f5','f6','f7','f8')", Nullable: false},
+			{Name: "payload", TypeRaw: "tinyblob", Nullable: true},
 		},
 		Indexes: []catalog.Index{{Name: "PRIMARY", Unique: true, Type: "BTREE", Columns: []string{"id"}}},
 	}
@@ -112,6 +114,9 @@ func TestTypeChanges(t *testing.T) {
 		{"signed change", "ALTER TABLE orders MODIFY COLUMN amount BIGINT UNSIGNED", model.AlgorithmCopy, model.RiskHigh},
 		{"enum append", "ALTER TABLE orders MODIFY COLUMN kind ENUM('a','b','c')", model.AlgorithmInplace, model.RiskMedium},
 		{"enum reorder", "ALTER TABLE orders MODIFY COLUMN kind ENUM('b','a')", model.AlgorithmCopy, model.RiskHigh},
+		{"enum to set", "ALTER TABLE orders MODIFY COLUMN kind SET('a','b')", model.AlgorithmCopy, model.RiskHigh},
+		{"set cross byte boundary", "ALTER TABLE orders MODIFY COLUMN flags SET('f1','f2','f3','f4','f5','f6','f7','f8','f9')", model.AlgorithmCopy, model.RiskHigh},
+		{"blob size change", "ALTER TABLE orders MODIFY COLUMN payload BLOB", model.AlgorithmUnknown, model.RiskMedium},
 		{"not null", "ALTER TABLE orders MODIFY COLUMN status VARCHAR(50) NOT NULL", model.AlgorithmInplace, model.RiskMedium},
 	}
 	for _, tt := range tests {

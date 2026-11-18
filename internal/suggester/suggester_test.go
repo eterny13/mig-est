@@ -54,4 +54,13 @@ func TestGhostCaveatsAreSpecific(t *testing.T) {
 	if !strings.Contains(out, "table has triggers") {
 		t.Errorf("missing trigger caveat:\n%s", out)
 	}
+
+	setStmt := &model.Statement{
+		Table: "orders", Kind: model.KindAlterTable, PredictedAlgorithm: model.AlgorithmInplace,
+		Operations: []model.Operation{{Kind: model.OpModifyColumn, ColumnType: "set('a','b','c')"}},
+	}
+	setOut := strings.Join(Suggest(setStmt, table), "\n")
+	if !strings.Contains(setOut, "ENUM/SET value removal") {
+		t.Errorf("missing SET warning:\n%s", setOut)
+	}
 }

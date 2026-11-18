@@ -21,6 +21,7 @@ type TableRef struct {
 // CollectOptions controls threshold-sensitive checks.
 type CollectOptions struct {
 	LongTransactionMinutes int
+	LongTransactionSeconds int
 	ReplicaLagSeconds      int
 }
 
@@ -40,13 +41,17 @@ func (c *Client) Collect(ctx context.Context, version string, refs []TableRef, o
 	if opts.LongTransactionMinutes <= 0 {
 		opts.LongTransactionMinutes = 5
 	}
+	longSeconds := opts.LongTransactionSeconds
+	if longSeconds <= 0 {
+		longSeconds = opts.LongTransactionMinutes * 60
+	}
 	if opts.ReplicaLagSeconds <= 0 {
 		opts.ReplicaLagSeconds = 10
 	}
 
 	c.collectVariables(ctx, snap)
 	snap.PerformanceSchemaOK = snap.PerformanceSchema
-	c.collectIdleTransactions(ctx, snap, opts.LongTransactionMinutes)
+	c.collectIdleTransactions(ctx, snap, longSeconds)
 	snap.Replication = c.collectReplication(ctx, snap)
 
 	seen := make(map[string]bool)
@@ -64,7 +69,7 @@ func (c *Client) Collect(ctx context.Context, version string, refs []TableRef, o
 		ti := c.collectTable(ctx, snap, schema, name)
 		snap.Tables[key] = ti
 		if ti.Exists {
-			c.collectLocks(ctx, snap, schema, name, opts.LongTransactionMinutes)
+			c.collectLocks(ctx, snap, schema, name, longSeconds)
 		}
 	}
 	return snap
@@ -281,10 +286,10 @@ func (c *Client) collectPartitioned(ctx context.Context, snap *Snapshot, schema,
 	return n > 0
 }
 
-func (c *Client) collectLocks(ctx context.Context, snap *Snapshot, schema, name string, longMinutes int) {
+func (c *Client) collectLocks(ctx context.Context, snap *Snapshot, schema, name string, longSeconds int) {
 	key := Key(schema, name)
 	if snap.PerformanceSchema {
-		if trx := c.collectLongTransactions(ctx, snap, schema, name, longMinutes); len(trx) > 0 {
+		if trx := c.collectLongTransactions(ctx, snap, schema, name, longSeconds); len(trx) > 0 {
 			snap.LongTransactions[key] = trx
 		}
 		if waits := c.collectMDLWaits(ctx, snap, schema, name); len(waits) > 0 {
@@ -293,7 +298,7 @@ func (c *Client) collectLocks(ctx context.Context, snap *Snapshot, schema, name 
 	}
 }
 
-func (c *Client) collectLongTransactions(ctx context.Context, snap *Snapshot, schema, name string, minutes int) []LongTransaction {
+func (c *Client) collectLongTransactions(ctx context.Context, snap *Snapshot, schema, name string, thresholdSeconds int) []LongTransaction {
 	qctx, cancel := c.queryContext(ctx)
 	defer cancel()
 	rows, err := c.db.QueryContext(qctx, `
@@ -309,7 +314,7 @@ func (c *Client) collectLongTransactions(ctx context.Context, snap *Snapshot, sc
 		  AND ml.LOCK_STATUS = 'GRANTED'
 		  AND TIMESTAMPDIFF(SECOND, trx.trx_started, NOW()) >= ?
 		GROUP BY trx.trx_mysql_thread_id, trx.trx_started, trx.trx_state, trx.trx_query, ml.LOCK_TYPE`,
-		schema, name, minutes*60)
+		schema, name, thresholdSeconds)
 	if err != nil {
 		snap.PerformanceSchemaOK = false
 		snap.AddUnknown(fmt.Sprintf("metadata locks for %s.%s unavailable: %v", schema, name, err))
@@ -355,10 +360,9 @@ func (c *Client) collectMDLWaits(ctx context.Context, snap *Snapshot, schema, na
 	return out
 }
 
-func (c *Client) collectIdleTransactions(ctx context.Context, snap *Snapshot, longMinutes int) {
+func (c *Client) collectIdleTransactions(ctx context.Context, snap *Snapshot, threshold int) {
 	qctx, cancel := c.queryContext(ctx)
 	defer cancel()
-	threshold := longMinutes * 60
 	query := `
 		SELECT trx.trx_mysql_thread_id,
 		       TIMESTAMPDIFF(SECOND, trx.trx_started, NOW()) AS age_seconds,
