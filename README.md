@@ -16,7 +16,7 @@ alternatives.
 > path.
 
 The v0.1 specification is in [`docs/spec.md`](docs/spec.md), and the
-directory/package architecture guide (Japanese) is in
+directory/package architecture guide is in
 [`docs/architecture.md`](docs/architecture.md).
 
 ## What it does
@@ -436,7 +436,7 @@ internal/mysqlver/    version parsing and feature gates
 testdata/             parser/classifier fixtures and expected results
 docker/               local MySQL 8.0/8.4 environment
 docs/spec.md          v0.1 specification
-docs/architecture.md  directory and package architecture guide (Japanese)
+docs/architecture.md  directory and package architecture guide
 ```
 
 ## Benchmarks

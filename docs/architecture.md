@@ -1,79 +1,79 @@
-# mig-est ディレクトリ構成と役割解説
+# mig-est Directory Structure and Architecture Guide
 
-`mig-est` は、MySQL（8.0 / 8.4 InnoDB）における DDL（`ALTER TABLE` 等）の実行前に、ロック、所要時間、アルゴリズム（`INSTANT` / `INPLACE` / `COPY` / `UNKNOWN`）や危険性を事前診断する読み取り専用 CLI ツールです。
+`mig-est` is a read-only diagnostic CLI for MySQL 8.0 and 8.4 (InnoDB) schema migrations. Before DDL statements such as `ALTER TABLE` are applied in production, it predicts the online-DDL algorithm (`INSTANT`, `INPLACE`, `COPY`, or `UNKNOWN`), inspects metadata locks and blockers, estimates duration and disk requirements, and recommends safer alternatives.
 
 ---
 
-## 全体アーキテクチャと処理フロー
+## Overall Architecture and Execution Pipeline
 
-マイグレーション診断時のデータの流れは以下のパイプラインになっています。
+A diagnostic run flows through the following pipeline:
 
 ```text
-[SQLファイル] ───> parser ───> classifier ───> checker ───> estimator ───> suggester ───> report
-                      │              │            │             │
-[DB / 引数] ──────────┴──────────────┴────> catalog             │
-                                                                │
-[過去の実測ログ] ──────────────────────────────────────────> history
+[SQL files] ───────> parser ───> classifier ───> checker ───> estimator ───> suggester ───> report
+                       │              │            │             │
+[DB / CLI flags] ──────┴──────────────┴────> catalog             │
+                                                                 │
+[Measured timings] ────────────────────────────────────────> history
 ```
 
 ---
 
-## 主要ディレクトリの解説
+## Primary Directories
 
 ### 1. `cmd/`
-Go の標準的なプロジェクトレイアウトに従った、**CLI バイナリのエントリポイント**です。
+Follows the standard Go project layout for executable entry points.
 
 - **`cmd/mig-est/main.go`**
-  - アプリケーション起動時の `main()` 関数のみを持つ薄いラッパーです。
-  - コマンドライン引数を `internal/cli.Run()` に渡し、返された終了コードで `os.Exit()` を呼び出します。
-  - コードのテスタビリティを確保するため、具体的なビジネスロジックはすべて `internal/` 配下に委譲されています。
+  - A minimal wrapper containing only `main()`.
+  - Passes command-line arguments and standard streams to `internal/cli.Run()` and exits with the returned status code via `os.Exit()`.
+  - Keeping all application logic under `internal/` allows end-to-end CLI testing without spawning subprocesses.
 
 ---
 
 ### 2. `internal/`
-Go の `internal` パッケージ規約により外部リポジトリからはインポートできない、**`mig-est` のコアロジック群**が集約されています。単一責任の原則に基づき、パッケージごとに責務が明確に分離されています。
+Contains the core packages of `mig-est`, enforced as private to this module by Go's `internal` package visibility rules. Each package has a single, well-defined responsibility.
 
-| パッケージ | 役割・処理内容 |
+| Package | Responsibility |
 | :--- | :--- |
-| **`internal/cli`** | **CLI コマンドのディスパッチと全体制御**<br>・サブコマンド（`check`, `record`, `version`）の振り分け。<br>・コマンドライン引数（位置引数ファイル指定、`--file`, `--offline`, `--table-size`, `--fail-on` 等）の解析とバリデーション。<br>・各内部コンポーネント（parser, catalog, classifier, checker 等）を順に呼び出すパイプラインのオーケストレーション。 |
-| **`internal/parser`** | **SQL の構文解析（AST パース）**<br>・Vitess の SQL パーサー（`vitess.io/vitess/go/vt/sqlparser`）を採用。<br>・DDL 文（`ALTER TABLE`, `CREATE/DROP INDEX`, `CREATE/DROP TABLE`, `RENAME TABLE`）から対象テーブル、追加・変更カラム、インデックス、制約定義を抽出。<br>・サポート外の構文（トリガー、ストアドプロシージャ、`DELIMITER` ブロック、DML 等）を早期検出。 |
-| **`internal/classifier`** | **実行アルゴリズムの予測・分類**<br>・MySQL のバージョンやテーブル構造に基づき、MySQL が選択するアルゴリズム（`INSTANT` / `INPLACE` / `COPY` / `UNKNOWN`）やロック種別を判定。<br>・MySQL 8.0.29 前後の `INSTANT ADD/DROP COLUMN` の仕様差分や型互換マトリクス（整数・文字列・DECIMAL・ENUM/SET 等）を考慮。<br>・複合操作（例: カラム追加と主キー追加が同居）の場合に最も重い操作（`COPY`）へ引き上げられる仕様をモデル化。 |
-| **`internal/catalog`** | **MySQL からのメタデータ収集（オンラインモード用）**<br>・安全のため `SELECT` と `SHOW` の読み取り専用クエリのみを発行（DDL/DML は一切発行しない）。<br>・`information_schema` 等からテーブルサイズ、行数、`ROW_FORMAT`、インデックス、外部キー、トリガー、パーティションを収集。<br>・`performance_schema` 等から MDL（メタデータロック）待ち、長時間トランザクション、アイドルトランザクション、レプリカラグ等の稼働状況スナップショットを取得。 |
-| **`internal/checker`** | **リスク・ブロッカーの検査**<br>・収集したメタデータやオンラインスナップショットから危険因子を診断。<br>・「主キー欠如」「外部キー・トリガーの存在」「ディスク空き容量不足（テーブルサイズの1.5倍未満など）」「長時間トランザクション・MDL待機」などの警告・エラー（Finding）を生成。 |
-| **`internal/estimator`** | **所要時間と必要ディスク容量の試算**<br>・テーブル容量（MB）とアルゴリズム（`COPY` / `INPLACE`）のスループット仮定から、所要時間を幅（例: `55s to 2m 44s`）と信頼度（confidence）として算出（断定的な単一数値は出さない方針）。<br>・`history` の実績記録が3件以上あれば中央値を用いてスループットを自動キャリブレーション。 |
-| **`internal/suggester`** | **安全な代替案の提示**<br>・`COPY` になる操作に対して「Expand/Contract パターンの利用」「前提条件を満たす場合の gh-ost / pt-online-schema-change の検討」を提案。<br>・暗黙的なフォールバックを防ぐための `ALGORITHM=INSTANT, LOCK=NONE` 明示の提案、外部キー追加前の孤立行チェック SQL、複数操作 `ALTER` の分割提案などを生成。 |
-| **`internal/report`** | **診断結果のフォーマット出力**<br>・ターミナル表示用のテキスト（`text`）、PR コメント・アーティファクト用の Markdown（`markdown`）、CI 連携・自動判定用の JSON（`json`）を生成。 |
-| **`internal/history`** | **実行実績ログの永続化（キャリブレーション用）**<br>・`mig-est record` で入力された過去のマイグレーション実績（テーブル名、サイズ、実測時間等）を `.mig-est/history.jsonl` に保存・読み込み（セキュリティのため SQL 本文や接続情報は記録しない）。 |
-| **`internal/model`** | **共通ドメインモデルの定義**<br>・`Statement`, `Finding`, `Risk`, `Algorithm`, `Severity`, `Report` など、パッケージ間を跨いで利用される共通の型・構造体を定義。 |
-| **`internal/config`** | **設定ファイルのロード**<br>・`.mig-est.yaml` を読み込み、閾値（ラージテーブル判定行数・容量、長時間トランザクション分数、レプリカラグ許容秒数、CI ゲート `--fail-on` レベルなど）を設定。 |
-| **`internal/mysqlver`** | **MySQL バージョン解析**<br>・MySQL 8.0.x / 8.4.x のバージョン文字列をパースし、特定バージョン以降で利用可能な機能フラグを判定。 |
-| **`internal/version`** | **ビルドバージョン管理**<br>・`Makefile` や GitHub Actions から `-ldflags` で埋め込まれるバージョン・Git コミット・ビルド日時を保持。 |
+| **`internal/cli`** | **Command dispatch and pipeline orchestration**<br>- Routes subcommands (`check`, `record`, `version`, `help`).<br>- Parses and validates CLI flags and positional SQL file arguments (`--file`, `--dir`, `--stdin`, `--offline`, `--table-size`, `--fail-on`, etc.).<br>- Coordinates `parser`, `catalog`, `classifier`, `checker`, `estimator`, `suggester`, and `report`. |
+| **`internal/parser`** | **SQL splitting and AST extraction**<br>- Splits multi-statement files while respecting quotes, comments, and `DELIMITER` blocks.<br>- Uses the Vitess SQL parser (`vitess.io/vitess/go/vt/sqlparser`) to extract DDL operations (`ALTER TABLE`, `CREATE/DROP INDEX`, `CREATE/DROP TABLE`, `RENAME TABLE`).<br>- Flags unsupported constructs (triggers, stored programs, events, `DELIMITER` blocks) early rather than treating them as safe. |
+| **`internal/classifier`** | **Online-DDL algorithm prediction**<br>- Predicts the MySQL execution algorithm (`INSTANT`, `INPLACE`, `COPY`, or `UNKNOWN`), lock level, and base risk from SQL operations, table metadata, and server version.<br>- Applies MySQL 8.0/8.4 version gates (such as positioned `ADD COLUMN` and `DROP COLUMN` before and after 8.0.29) and type-compatibility rules (integers, strings, decimals, `TEXT`/`BLOB`, `ENUM`/`SET`).<br>- Combines multi-operation `ALTER TABLE` statements conservatively so the most expensive operation governs the statement. |
+| **`internal/catalog`** | **Read-only MySQL metadata collection (online mode)**<br>- Issues only `SELECT` and `SHOW` queries with per-query timeouts; never executes DDL or DML.<br>- Collects table size, approximate row counts, engine, `ROW_FORMAT`, columns, indexes, foreign keys, triggers, and partition state from `information_schema`.<br>- Collects active metadata-lock blockers, long-running transactions, idle transactions, and replication lag from `performance_schema`, `INNODB_TRX`, `PROCESSLIST`, and `SHOW REPLICA STATUS`. |
+| **`internal/checker`** | **Blocker and context-sensitive risk evaluation**<br>- Evaluates table metadata and runtime snapshots to produce prioritized findings.<br>- Detects missing primary keys, incoming/outgoing foreign keys, triggers, unsupported storage engines, insufficient or unknown disk space, large-table rebuilds, MDL waits, long/idle transactions, and replication issues. |
+| **`internal/estimator`** | **Duration-range and disk-space estimation**<br>- Computes conservative time ranges (for example, `55s to 2m 44s`) and confidence levels (`low`, `medium`, `high`) from table byte sizes and algorithm throughput models rather than claiming exact single-point durations.<br>- Calibrates throughput automatically from the median of matching local history records once at least three measurements exist. |
+| **`internal/suggester`** | **Actionable safer alternatives**<br>- Recommends expand/contract workflows and checks `gh-ost` / `pt-online-schema-change` prerequisites for `COPY` operations.<br>- Suggests explicit `ALGORITHM=INSTANT, LOCK=NONE` clauses to prevent silent fallback, generates orphan-row check SQL for `ADD FOREIGN KEY`, and recommends splitting multi-operation `ALTER` statements. |
+| **`internal/report`** | **Report rendering**<br>- Formats diagnostic results as terminal text (with optional ANSI color and `--quiet` mode), pull-request-friendly Markdown, or machine-readable JSON (intentionally omitting raw SQL and credentials). |
+| **`internal/history`** | **Calibration history storage**<br>- Appends and loads real migration timings in JSON Lines format (`.mig-est/history.jsonl`) for `mig-est record`.<br>- Deliberately omits raw SQL text, usernames, passwords, and DSNs. |
+| **`internal/model`** | **Shared domain types**<br>- Defines data structures shared across packages (`Statement`, `Operation`, `Finding`, `Estimate`, `Risk`, `Algorithm`, `Severity`, `Report`, etc.). |
+| **`internal/config`** | **Configuration loading**<br>- Loads `.mig-est.yaml`, applies documented defaults, and validates thresholds, output format, and `--fail-on` settings. |
+| **`internal/mysqlver`** | **MySQL version parsing and feature gates**<br>- Parses MySQL 8.0.x and 8.4.x version strings, rejects unsupported families (such as MariaDB or MySQL 5.7), and evaluates version-dependent feature gates. |
+| **`internal/version`** | **Build-time version metadata**<br>- Holds the CLI version, Git commit hash, and build timestamp injected via `-ldflags`. |
 
 ---
 
 ### 3. `testdata/`
-ユニットテストやゴールデンテスト（回帰テスト）で使用される **テストフィクスチャ（検証データ）** が格納されています。
+Contains SQL fixtures and golden expectations used by parser and classifier regression tests.
 
 - **`testdata/migrations/`**
-  - 代表的な MySQL 8.0 DDL パターン 28 件（`ALTER TABLE` / インデックス操作 26 パターン、`CREATE TABLE`、未サポートのトリガー定義）の SQL ファイル群です。
-  - `INSTANT` カラム追加・リネーム・デフォルト変更・不可視インデックス変更、`INPLACE` インデックス追加/削除・外部キー・CHECK 制約・8.0.29 未満の位置指定カラム追加/削除、`COPY` 文字コード変換・主キー追加/削除・エンジン/行フォーマット変更・`FORCE`、不正な `ALGORITHM=INSTANT` 指定（`CRITICAL` 検出）、パーティション操作（`UNKNOWN`）などを網羅しています。
+  - 28 reviewable SQL fixture files covering 26 representative MySQL 8.0 `ALTER TABLE` and index DDL patterns, plus `CREATE TABLE` and unsupported trigger definitions.
+  - Covers `INSTANT` column additions, renames, default changes, and invisible index toggles; `INPLACE` index builds/drops, foreign keys, `CHECK` constraints, and pre-8.0.29 positioned/dropped columns; `COPY` character-set conversions, primary-key changes, engine/row-format rebuilds, and `FORCE`; invalid explicit `ALGORITHM=INSTANT` combinations (`CRITICAL`); and conservative `UNKNOWN` partition operations.
 - **`testdata/expected/classification.json`**
-  - `migrations/` 配下の各 SQL に対し、分類器（`classifier`）が出力すべき期待結果（予測アルゴリズム、リスクレベル、適用ルール ID）を定義したゴールデンファイルです。
-  - `internal/classifier/fixtures_test.go` で全ファイルの網羅性と判定結果が自動検証され、分類ルールのリグレッションを検知します。
+  - Golden classification output (predicted algorithm, risk level, and rule IDs) for MySQL 8.0.28 in offline mode without table metadata.
+  - Verified by `internal/classifier/fixtures_test.go`, which also ensures every `.sql` fixture in `testdata/migrations/` has a corresponding golden entry.
 - **`testdata/README.md`**
-  - テストフィクスチャの利用方針と更新ルールについてのドキュメントです。
+  - Guidelines for maintaining and updating the golden fixtures.
 
 ---
 
-## その他のディレクトリ
+## Other Directories
 
 - **`docs/`**
-  - **`docs/spec.md`**: ツールの要件定義、アルゴリズムマトリクス、リスク判定ルール、ベンチマーク記録をまとめた仕様書（英語）です。
-  - **`docs/architecture.md`**: 本ドキュメント（ディレクトリ・パッケージ構成解説）です。
+  - **`docs/spec.md`**: Full v0.1 specification covering CLI behavior, classification rules, blocker checks, estimation formulas, and exploratory benchmark records.
+  - **`docs/architecture.md`**: This directory and package architecture guide.
 - **`docker/`**
-  - 動作確認・統合テスト用の MySQL 8.0 および MySQL 8.4 を立ち上げる `docker-compose.yml` と、読み取り専用アカウント（`migread`）を含む初期スキーマ投入スクリプト（`init/01-schema.sql`）が含まれます。
-- **`bin/` / `dist/`**
-  - `make build`（ローカル向け `bin/mig-est`）および `make dist`（Linux/macOS マルチアーキテクチャ向け配布バイナリと `SHA256SUMS`）の出力先です（Git 管理対象外）。
+  - `docker-compose.yml` and `init/01-schema.sql` for spinning up local MySQL 8.0 and 8.4 instances with sample tables and a least-privilege read-only `migread` user for integration testing.
+- **`bin/` and `dist/`**
+  - Output directories (git-ignored) for local builds (`make build` -> `bin/mig-est`) and cross-platform static release artifacts (`make dist` -> `dist/mig-est-*` and `dist/SHA256SUMS`).
 - **`.github/workflows/`**
-  - **`ci.yml`**: PR・`main` ブランチ push 時のフォーマット検査・静的解析（`go vet`）・レース検出テスト（`go test -race`）・オフラインスモークテストを実行します。
-  - **`release.yml`**: タグ push または手動実行（自動パッチ採番対応）により、Linux/macOS（amd64/arm64）の静的バイナリと `SHA256SUMS` をビルド・検証し、リリースノートを自動生成して GitHub Releases へ公開します。
+  - **`ci.yml`**: Runs `gofmt`, `go vet`, `go test -race ./...`, and an offline CLI smoke test on pushes to `main` and pull requests.
+  - **`release.yml`**: Validates formatting/vet/tests, cross-compiles static `linux`/`darwin` (`amd64`/`arm64`) binaries with `SHA256SUMS`, smoke-tests the Linux binary, and publishes a GitHub Release with auto-generated release notes on tag pushes or manual dispatch.
