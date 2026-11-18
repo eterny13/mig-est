@@ -40,5 +40,131 @@
     "algorithm": "INPLACE",
     "risk": "medium",
     "rule_ids": ["FK-ADD-01", "META-01"]
+  },
+  {
+    "file": "08_positioned_add_column.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["ADD-COL-02", "META-01"]
+  },
+  {
+    "file": "09_drop_column.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["DROP-COL-02", "META-01"]
+  },
+  {
+    "file": "10_rename_column.sql",
+    "algorithm": "INSTANT",
+    "risk": "medium",
+    "rule_ids": ["RENAME-COL-01", "META-01"]
+  },
+  {
+    "file": "11_set_column_default.sql",
+    "algorithm": "INSTANT",
+    "risk": "medium",
+    "rule_ids": ["DEFAULT-01", "META-01"]
+  },
+  {
+    "file": "12_drop_column_default.sql",
+    "algorithm": "INSTANT",
+    "risk": "medium",
+    "rule_ids": ["DEFAULT-01", "META-01"]
+  },
+  {
+    "file": "13_modify_column_offline.sql",
+    "algorithm": "UNKNOWN",
+    "risk": "medium",
+    "rule_ids": ["MOD-COL-01", "META-01"]
+  },
+  {
+    "file": "14_add_unique_index.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["IDX-ADD-02", "META-01"]
+  },
+  {
+    "file": "15_add_fulltext_index.sql",
+    "algorithm": "INPLACE",
+    "risk": "high",
+    "rule_ids": ["IDX-ADD-03", "META-01"]
+  },
+  {
+    "file": "16_drop_index.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["IDX-DROP-01", "META-01"]
+  },
+  {
+    "file": "17_rename_index.sql",
+    "algorithm": "INSTANT",
+    "risk": "medium",
+    "rule_ids": ["IDX-RENAME-01", "META-01"]
+  },
+  {
+    "file": "18_drop_primary_key.sql",
+    "algorithm": "COPY",
+    "risk": "high",
+    "rule_ids": ["PK-DROP-01"]
+  },
+  {
+    "file": "19_drop_foreign_key.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["FK-DROP-01", "META-01"]
+  },
+  {
+    "file": "20_add_check_constraint.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["CHECK-ADD-01", "META-01"]
+  },
+  {
+    "file": "21_drop_check_constraint.sql",
+    "algorithm": "INPLACE",
+    "risk": "medium",
+    "rule_ids": ["CHECK-DROP-01", "META-01"]
+  },
+  {
+    "file": "22_change_engine.sql",
+    "algorithm": "COPY",
+    "risk": "high",
+    "rule_ids": ["ENGINE-01"]
+  },
+  {
+    "file": "23_change_row_format.sql",
+    "algorithm": "COPY",
+    "risk": "high",
+    "rule_ids": ["ROWFMT-01"]
+  },
+  {
+    "file": "24_set_table_default_charset.sql",
+    "algorithm": "INSTANT",
+    "risk": "medium",
+    "rule_ids": ["CHARSET-02", "META-01"]
+  },
+  {
+    "file": "25_alter_index_invisible.sql",
+    "algorithm": "INSTANT",
+    "risk": "medium",
+    "rule_ids": ["VIS-01", "META-01"]
+  },
+  {
+    "file": "26_force_rebuild.sql",
+    "algorithm": "COPY",
+    "risk": "high",
+    "rule_ids": ["FORCE-01"]
+  },
+  {
+    "file": "27_invalid_explicit_algorithm.sql",
+    "algorithm": "INPLACE",
+    "risk": "critical",
+    "rule_ids": ["IDX-ADD-01", "META-01", "ALGO-01"]
+  },
+  {
+    "file": "28_partition_by_hash.sql",
+    "algorithm": "UNKNOWN",
+    "risk": "medium",
+    "rule_ids": ["PART-01", "META-01"]
   }
 ]

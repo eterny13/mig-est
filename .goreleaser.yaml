@@ -25,12 +25,12 @@ builds:
       - -X github.com/eterny13/mig-est/internal/version.Date={{ .Date }}
 
 archives:
-  - formats: [tar.gz]
+  - formats: [binary]
     name_template: >-
-      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      {{ .ProjectName }}-{{ .Os }}-{{ .Arch }}
 
 checksum:
-  name_template: checksums.txt
+  name_template: SHA256SUMS
 
 changelog:
   sort: asc

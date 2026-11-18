@@ -66,7 +66,8 @@ func Suggest(stmt *model.Statement, table *catalog.TableInfo) []string {
 			} else if stmt.PredictedAlgorithm == model.AlgorithmUnknown {
 				add("The type pair is not in the compatibility table. Test the exact ALTER on a staging copy and inspect the chosen algorithm with EXPLAIN or the performance_schema DDL log.")
 			}
-			if strings.Contains(strings.ToUpper(op.ColumnType), "ENUM") {
+			upperType := strings.ToUpper(op.ColumnType)
+			if strings.Contains(upperType, "ENUM") || strings.HasPrefix(upperType, "SET(") || upperType == "SET" {
 				add("ENUM/SET value removal or reordering changes the meaning of existing stored values. Add new values at the end and keep old values until a backfill is complete.")
 			}
 		case model.OpAddIndex, model.OpAddPrimaryKey:

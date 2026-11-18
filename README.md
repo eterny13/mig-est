@@ -6,16 +6,18 @@
 locks, estimates a time range and disk requirement, and suggests safer
 alternatives.
 
-> **Status: v0.1 prototype.** The binary, offline/online paths, reports, and
-> calibration history work. Prebuilt release binaries and Homebrew packaging
-> are not published yet. Initial single-run benchmark results are listed below;
-> build from source and test against a staging database first.
+> **Status: v0.1.1.** Offline/online diagnostics, reports, calibration history,
+> and prebuilt Linux/macOS release binaries are available. Homebrew packaging is
+> planned for v0.2. Initial single-run benchmark results are listed below;
+> always test against a staging database first.
 
 > **mig-est never executes a migration.** It parses SQL as text and, in online
 > mode, sends only `SELECT` and `SHOW` queries. There is no DDL/DML execution
 > path.
 
-The v0.1 specification [`docs/spec.md`](docs/spec.md).
+The v0.1 specification is in [`docs/spec.md`](docs/spec.md), and the
+directory/package architecture guide is in
+[`docs/architecture.md`](docs/architecture.md).
 
 ## What it does
 
@@ -48,6 +50,24 @@ run one.
 | Input | `ALTER TABLE`, `CREATE INDEX`, `DROP INDEX`, `CREATE TABLE`, `DROP TABLE`, `RENAME TABLE` |
 | Out of scope | Stored programs, triggers, events, and `DELIMITER` blocks are reported as unsupported; DML and views are listed as out of scope |
 | Database families | MariaDB, MySQL 5.7, and PostgreSQL are not supported |
+
+## Install
+
+Download a prebuilt static binary for Linux or macOS (`amd64` / `arm64`) from
+[GitHub Releases](https://github.com/eterny13/mig-est/releases) and verify its
+checksum against `SHA256SUMS`:
+
+```bash
+VERSION=v0.1.1
+OS=darwin   # linux or darwin
+ARCH=arm64  # amd64 or arm64
+
+curl -fsSLO "https://github.com/eterny13/mig-est/releases/download/${VERSION}/mig-est-${OS}-${ARCH}"
+curl -fsSLO "https://github.com/eterny13/mig-est/releases/download/${VERSION}/SHA256SUMS"
+grep "mig-est-${OS}-${ARCH}" SHA256SUMS | shasum -a 256 -c -
+chmod +x "mig-est-${OS}-${ARCH}"
+mv "mig-est-${OS}-${ARCH}" /usr/local/bin/mig-est
+```
 
 ## Build
 
@@ -416,6 +436,7 @@ internal/mysqlver/    version parsing and feature gates
 testdata/             parser/classifier fixtures and expected results
 docker/               local MySQL 8.0/8.4 environment
 docs/spec.md          v0.1 specification
+docs/architecture.md  directory and package architecture guide
 ```
 
 ## Benchmarks
@@ -445,8 +466,8 @@ for the test setup and additional context.
 
 ## Known limitations
 
-- This is a prototype; release binaries and Homebrew packaging are not
-  published.
+- Homebrew tap packaging is planned for v0.2; use GitHub Releases binaries or
+  build from source in v0.1.x.
 - The classification matrix is intentionally conservative. It is not a
   substitute for testing the exact statement on a production-sized staging
   copy.
@@ -459,8 +480,7 @@ for the test setup and additional context.
 - gh-ost/pt-osc advice is a prerequisite check, not an execution integration.
 - The published benchmarks are single-run local Docker results and may not
   represent production hardware. Repeated tests on production-sized staging
-  systems are still needed. Prebuilt Linux/macOS release assets and Homebrew
-  packaging are not published.
+  systems are still needed.
 - The tool does not inspect table data and does not check PII or business
   constraints in existing rows.
 

@@ -1,8 +1,10 @@
 package catalog
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMaskDSN(t *testing.T) {
@@ -62,5 +64,21 @@ func TestParseByteSize(t *testing.T) {
 	}
 	if got := parseByteSize("bad"); got != 0 {
 		t.Errorf("bad size = %d, want 0", got)
+	}
+}
+
+func TestOpenDoesNotLeakCredentialsOnError(t *testing.T) {
+	ctx := context.Background()
+	for _, dsn := range []string{
+		"migread:super-secret-pass@bad-dsn-without-slash",
+		"migread:super-secret-pass@tcp(127.0.0.1:1)/appdb",
+	} {
+		_, err := Open(ctx, dsn, 200*time.Millisecond)
+		if err == nil {
+			t.Fatalf("expected error for DSN")
+		}
+		if strings.Contains(err.Error(), "super-secret-pass") {
+			t.Errorf("Open error leaked password: %v", err)
+		}
 	}
 }

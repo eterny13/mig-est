@@ -218,7 +218,7 @@ func extractAlter(stmt *Statement, v *sqlparser.AlterTable) error {
 		case *sqlparser.RenameIndex:
 			stmt.Options = append(stmt.Options, Option{Kind: model.OpRenameIndex, OldColumn: o.OldName.String(), Note: o.NewName.String()})
 		case *sqlparser.AlterCharset:
-			stmt.Options = append(stmt.Options, Option{Kind: model.OpConvertCharset, Note: o.CharacterSet + " " + o.Collate})
+			stmt.Options = append(stmt.Options, Option{Kind: model.OpConvertCharset, Note: strings.TrimSpace(o.CharacterSet + " " + o.Collate)})
 		case sqlparser.TableOptions:
 			for _, to := range o {
 				name := strings.ToUpper(to.Name)

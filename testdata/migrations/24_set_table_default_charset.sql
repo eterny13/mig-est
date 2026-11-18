@@ -1,0 +1,2 @@
+ALTER TABLE orders
+  CHARACTER SET = utf8mb4;

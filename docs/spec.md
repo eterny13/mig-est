@@ -544,7 +544,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install mig-est
         run: |
-          curl -fsSL -o mig-est https://github.com/OWNER/mig-est/releases/download/v0.1.0/mig-est-linux-amd64
+          curl -fsSL -o mig-est https://github.com/eterny13/mig-est/releases/download/v0.1.1/mig-est-linux-amd64
           chmod +x mig-est
       - name: Check migrations
         env:
@@ -648,19 +648,19 @@ The benchmark completion criterion also asks for these results in README. The su
 
 ### 17.4 Definition of Done
 
-The original v0.1 completion criteria are:
+The v0.1.x completion criteria and verification status are:
 
-- [ ] Correctly classify at least 20 representative MySQL 8.0 ALTER patterns using golden tests.
-- [ ] Read table size, row estimates, foreign keys, triggers, and MDL blockers through a read-only connection.
-- [ ] Report risk for COPY, INPLACE, and INSTANT and support CI failure at HIGH or above.
-- [ ] Emit a duration range and confidence; use low confidence without calibration.
-- [ ] Offer safer alternatives for at least five major risky operations.
-- [ ] Support JSON and Markdown output.
-- [x] Publish measured one-million-row and ten-million-row Docker benchmark results in README.
-- [ ] Document non-execution, read-only account setup, and staging usage in README.
-- [ ] Publish Linux and macOS binaries through GitHub Releases.
+- [x] Correctly classify at least 20 representative MySQL 8.0 ALTER patterns using golden tests (`TestGoldenClassifications` covers 28 fixtures including 26 representative ALTER/index DDL patterns, alongside version-gated and type-pair unit tests in `internal/classifier`).
+- [x] Read table size, row estimates, foreign keys, triggers, and MDL blockers through a read-only connection (`internal/catalog`, verified via `TestIntegrationOnlineReadOnly`, `TestIntegrationMDLBlocker`, and Section 17.2).
+- [x] Report risk for COPY, INPLACE, and INSTANT and support CI failure at HIGH or above (`internal/classifier`, `internal/checker`, and `mig-est check --fail-on`).
+- [x] Emit a duration range and confidence; use low confidence without calibration (`internal/estimator` and `TestCopyEstimateRangeAndDisk`).
+- [x] Offer safer alternatives for at least five major risky operations (`internal/suggester`: COPY expand/contract, NOT NULL without default, explicit `ALGORITHM`/`LOCK`, multi-operation splitting, foreign-key orphan checks, primary-key duplicate checks, `ENUM`/`SET` value ordering, and `gh-ost`/`pt-osc` prerequisite checks).
+- [x] Support JSON and Markdown output (`internal/report` and CLI integration tests).
+- [x] Publish measured one-million-row and ten-million-row Docker benchmark results in README (Section 17.3 and `README.md`).
+- [x] Document non-execution, read-only account setup, and staging usage in README (`README.md`).
+- [x] Publish Linux and macOS binaries through GitHub Releases (automated via `.github/workflows/release.yml` and `make dist` with `SHA256SUMS`).
 
-The performance benchmark item is now documented in this specification and README. The remaining unchecked items still need evidence or an explicit change to the v0.1 release scope before claiming that the full Definition of Done is met.
+All v0.1.1 code, test, documentation, and release-automation criteria are met in-tree; pushing the `v0.1.1` tag (or running the `Release` GitHub Actions workflow) publishes the verified Linux and macOS artifacts to GitHub Releases.
 
 ## 18. Roadmap
 

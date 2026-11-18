@@ -1,0 +1,2 @@
+ALTER TABLE orders
+  ADD COLUMN priority INT NOT NULL DEFAULT 0 AFTER status;
